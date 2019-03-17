@@ -3,6 +3,7 @@ package echo
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -56,6 +57,13 @@ func (s *Service) Start() (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			if err := proc.Stop(); err != nil {
+				log.Printf("stop Chrome: %s", err)
+			}
+		}
+	}()
 
 	var list []struct {
 		Description          string `json:"description"`
@@ -68,22 +76,21 @@ func (s *Service) Start() (*url.URL, error) {
 	}
 	res, err := http.Get("http://" + proc.Addr() + "/json/list")
 	if err != nil {
-		proc.Stop()
 		return nil, err
 	}
-	if err = json.NewDecoder(res.Body).Decode(&list); err != nil {
-		res.Body.Close()
-		proc.Stop()
+	buf, err := ioutil.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("read DevTools response: %s", err)
+	}
+	if err = json.Unmarshal(buf, &list); err != nil {
 		return nil, err
 	}
-	res.Body.Close()
 	if len(list) != 1 {
-		proc.Stop()
-		return nil, fmt.Errorf("expected exactly one list result, got %d", len(list))
+		return nil, fmt.Errorf("expected exactly one list result, got %s", string(buf))
 	}
 	uri, err := url.Parse(list[0].WebSocketDebuggerURL)
 	if err != nil {
-		proc.Stop()
 		return nil, fmt.Errorf("invalid WS debug url: %s", err)
 	}
 	go func() {
