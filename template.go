@@ -35,7 +35,7 @@ var indexTpl = []byte(`<html lang="en">
 
     feedback();
 
-    let ws = new WebSocket("ws://127.0.0.1:3246/ws");
+    let ws = new WebSocket("ws://" + location.host + "/ws");
     ws.onerror = function (ev) {
         feedback('WS connect error', ev);
         refreshButton.onclick = null;
@@ -94,7 +94,37 @@ var indexTpl = []byte(`<html lang="en">
                 }));
                 resetScreencastState();
             };
+            viewport.onmousedown = function (ev) {
+                messageID++;
+                ws.send(JSON.stringify({
+                    id: messageID,
+                    method: "Input.dispatchMouseEvent",
+                    params: {
+                        type: "mousePressed",
+                        button: "left",
+                        clickCount: 1,
+                        x: ev.pageX - viewport.offsetLeft,
+                        y: ev.pageY - viewport.offsetTop,
+                        timestamp: new Date().getTime()
+                    }
+                }));
+            };
+            viewport.onmouseup = function (ev) {
+                ws.send(JSON.stringify({
+                    id: messageID,
+                    method: "Input.dispatchMouseEvent",
+                    params: {
+                        type: "mouseReleased",
+                        button: "left",
+                        clickCount: 1,
+                        x: ev.pageX - viewport.offsetLeft,
+                        y: ev.pageY - viewport.offsetTop,
+                        timestamp: new Date().getTime()
+                    }
+                }));
+            };
         };
+        refreshButton.click();
         address.onkeydown = function (ev) {
             if (ev.key !== "Enter") {
                 return;
@@ -102,6 +132,9 @@ var indexTpl = []byte(`<html lang="en">
             let url = address.value;
             if (url.length === 0) {
                 return;
+            }
+            if (url.indexOf('.') === -1) {
+                url = "https://google.com/?q=" + encodeURIComponent(url);
             }
             if (url.indexOf('://') === -1) {
                 url = "http://" + url;

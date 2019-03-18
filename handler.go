@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,22 +15,7 @@ var (
 )
 
 type Handler struct {
-	Service  *Service
-	o        sync.Once
-	upgrader *websocket.Upgrader
-	proxy    *httputil.ReverseProxy
-}
-
-func (h *Handler) init() {
-	h.upgrader = &websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-	h.proxy = httputil.NewSingleHostReverseProxy(&url.URL{
-		Scheme: "http",
-		Host:   "127.0.0.1:9004",
-	})
+	Service *Service
 }
 
 type Result struct {
@@ -59,7 +43,6 @@ func (h *Handler) serveHTML(w http.ResponseWriter, r *http.Request, tpl []byte) 
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Serving %s", r.URL.Path)
-	h.o.Do(h.init)
 	switch r.URL.Path {
 	case "/":
 		h.serveHTML(w, r, indexTpl)
@@ -76,10 +59,16 @@ func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uri, err := h.Service.Start()
-	if err != nil {
-		h.serveError(w, r, err)
-		return
+	var err error
+	var uri *url.URL
+	if uris := h.Service.List(); len(uris) != 0 {
+		uri = uris[0]
+	} else {
+		uri, err = h.Service.Start()
+		if err != nil {
+			h.serveError(w, r, err)
+			return
+		}
 	}
 	(&httputil.ReverseProxy{
 		Director: func(req *http.Request) {

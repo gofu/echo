@@ -107,3 +107,13 @@ func (s *Service) Start() (*url.URL, error) {
 	}()
 	return uri, nil
 }
+
+func (s *Service) List() []*url.URL {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	uris := make([]*url.URL, len(s.handles))
+	for i, h := range s.handles {
+		uris[i] = h.uri
+	}
+	return uris
+}
